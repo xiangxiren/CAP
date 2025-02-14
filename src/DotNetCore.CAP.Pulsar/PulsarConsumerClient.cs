@@ -63,7 +63,7 @@ internal sealed class PulsarConsumerClient : IConsumerClient
                 if (_groupConcurrent > 0)
                 {
                     _semaphore.Wait(cancellationToken);
-                    Task.Run(() => Consume(), cancellationToken).ConfigureAwait(false);
+                    Task.Run(Consume, cancellationToken).ConfigureAwait(false);
                 }
                 else
                 {
@@ -78,7 +78,7 @@ internal sealed class PulsarConsumerClient : IConsumerClient
                         headers.Add(header.Key, header.Value);
                     }
 
-                    headers.Add(Headers.Group, _groupId);
+                    headers[Headers.Group] = _groupId;
 
                     var message = new TransportMessage(headers, consumerResult.Data);
 

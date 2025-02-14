@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Azure.Messaging.ServiceBus;
 using Azure.Messaging.ServiceBus.Administration;
+using DotNetCore.CAP.AzureServiceBus.Helpers;
 using DotNetCore.CAP.Messages;
 using DotNetCore.CAP.Transport;
 using Microsoft.Extensions.Logging;
@@ -48,7 +49,7 @@ internal sealed class AzureServiceBusConsumerClient : IConsumerClient
 
     public Action<LogMessageEventArgs>? OnLogCallback { get; set; }
 
-    public BrokerAddress BrokerAddress => new("AzureServiceBus", _asbOptions.ConnectionString);
+    public BrokerAddress BrokerAddress => ServiceBusHelpers.GetBrokerAddress(_asbOptions.ConnectionString, _asbOptions.Namespace);
 
     public void Subscribe(IEnumerable<string> topics)
     {
@@ -127,13 +128,16 @@ internal sealed class AzureServiceBusConsumerClient : IConsumerClient
     public void Commit(object? sender)
     {
         var commitInput = (AzureServiceBusConsumerCommitInput)sender!;
-        if (_serviceBusProcessor?.AutoCompleteMessages ?? false)
+        if (!_serviceBusProcessor!.AutoCompleteMessages)
             commitInput.CompleteMessageAsync().GetAwaiter().GetResult();
+        _semaphore.Release();
     }
 
     public void Reject(object? sender)
     {
-        // ignore
+        var commitInput = (AzureServiceBusConsumerCommitInput)sender!;
+        commitInput.AbandonMessageAsync().GetAwaiter().GetResult();
+        _semaphore.Release();
     }
 
     public void Dispose()
@@ -274,7 +278,7 @@ internal sealed class AzureServiceBusConsumerClient : IConsumerClient
         var headers = message.ApplicationProperties
             .ToDictionary(x => x.Key, y => y.Value?.ToString());
 
-        headers.Add(Headers.Group, _subscriptionName);
+        headers[Headers.Group] = _subscriptionName;
 
         if (_asbOptions.CustomHeadersBuilder != null)
         {

@@ -285,6 +285,7 @@ internal class ConsumerRegister : IConsumerRegister
         switch (logmsg.LogType)
         {
             case MqLogType.ConsumerCancelled:
+                _isHealthy = false;
                 _logger.LogWarning("RabbitMQ consumer cancelled. --> " + logmsg.Reason);
                 break;
             case MqLogType.ConsumerRegistered:
@@ -326,6 +327,10 @@ internal class ConsumerRegister : IConsumerRegister
                 _logger.LogError(
                     "AmazonSQS subscriber change message's visibility failed, message isn't in flight. --> " +
                     logmsg.Reason);
+                break;
+            case MqLogType.RedisConsumeError:
+                _isHealthy = true;
+                _logger.LogError("Redis client consume error. --> {reason}", logmsg.Reason);
                 break;
             default:
                 throw new ArgumentOutOfRangeException();

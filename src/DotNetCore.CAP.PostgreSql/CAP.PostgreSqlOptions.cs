@@ -2,8 +2,10 @@
 // Licensed under the MIT License. See License.txt in the project root for license information.
 
 using System;
+using System.Linq;
 using DotNetCore.CAP.Internal;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Npgsql;
@@ -17,8 +19,8 @@ public class PostgreSqlOptions : EFOptions
     /// Gets or sets the database's connection string that will be used to store database entities.
     /// </summary>
     [Obsolete("Use .DataSource = NpgsqlDataSource.Create(<connectionString>) for same behavior.")]
-    public string ConnectionString { get; set; } = default!;
-    
+    public string? ConnectionString { get; set; }
+
     /// <summary>
     /// Gets or sets the Npgsql data source that will be used to store database entities.
     /// </summary>
@@ -55,10 +57,15 @@ internal class ConfigurePostgreSqlOptions : IConfigureOptions<PostgreSqlOptions>
         using var scope = _serviceScopeFactory.CreateScope();
         var provider = scope.ServiceProvider;
         using var dbContext = (DbContext)provider.GetRequiredService(options.DbContextType);
-        var connectionString = dbContext.Database.GetConnectionString();
-        if (string.IsNullOrEmpty(connectionString)) throw new ArgumentNullException(connectionString);
+
+        var coreOptions = dbContext.GetService<IDbContextOptions>();
+        var extension = coreOptions.Extensions.First(x => x.Info.IsDatabaseProvider);
+        options.DataSource = extension.GetType().GetProperty(nameof(options.DataSource))?.GetValue(extension) as NpgsqlDataSource;
+        if (options.DataSource == null)
+        {
 #pragma warning disable CS0618 // Type or member is obsolete
-        options.ConnectionString = connectionString;
+            options.ConnectionString = extension.GetType().GetProperty(nameof(options.ConnectionString))?.GetValue(extension) as string;
 #pragma warning restore CS0618 // Type or member is obsolete
+        }
     }
 }
